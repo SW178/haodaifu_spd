@@ -67,6 +67,15 @@ def parse_departmentlist(url):
 def parse_department(url):
     department_soup = BeautifulSoup(get_page(url), 'html5lib')
     doctor_soup = department_soup.select('td[class="tdnew_a"] > li')
+    try:
+        next_href = department_soup.find('div', class_='p_bar').find('a', text='下一页')['href']
+        print(next_href)
+    except:
+        next_href = 0
+
+    if next_href:
+        yield from parse_department(next_href)
+
     for li in doctor_soup:
         doctor_name = li.a['title']
         doctor_title = li.p.string
@@ -107,7 +116,7 @@ VALUES('%s',
     except:
         # 发生错误时回滚
         db.rollback()
-        print(db.Error)
+        print('数据未录入！！！！！')
     # 关闭数据库连接
     db.close()
 
