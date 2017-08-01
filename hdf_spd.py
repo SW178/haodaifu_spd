@@ -1,42 +1,15 @@
 # -*- coding:utf-8 -*-
-import time
+
 import pymysql
 import re
 import requests
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 
-base_url = 'http://www.haodf.com/yiyuan/all/list.htm'
-
-db = pymysql.connect('localhost', 'root', 'a555554444', 'DOCTOR', charset='utf8')
-# 使用cursor()方法获取操作游标
-cursor = db.cursor()
-
-# 使用 execute() 方法执行 SQL，如果表存在则删除
-cursor.execute("DROP TABLE IF EXISTS DOCTOR")
-# 使用预处理语句创建表
-sql = """CREATE TABLE DOCTOR (
-            DOCTOR_ID INT NOT NULL AUTO_INCREMENT,
-            DOCTOR_NAME CHAR(100),
-            TITLE CHAR(100),
-            DOCTOR_HREF CHAR(200),
-            DEPARTMENT CHAR(100),
-            HOSPITAL_NAME CHAR(100),
-            HOSPITAL_LEVEL CHAR(50),
-            CITY CHAR(100),
-            PROVINCE CHAR(100),
-            PRIMARY KEY (DOCTOR_ID)
-            ) ENGINE=InnoDB;"""
-
-cursor.execute(sql)
-# cursor.execute('INSERT INTO DOCTOR(ID) VALUES(0)')
-db.close()
-
 def get_page(url):
     ua = UserAgent()
     header = {"User-Agent": ua.random}
     r = requests.get(url, headers=header)
-    print(r.status_code)
     return r.content
 
 #解析地区省市页面
@@ -119,8 +92,33 @@ VALUES('%s',
     # 关闭数据库连接
     db.close()
 
+
+base_url = 'http://www.haodf.com/yiyuan/all/list.htm'
+
+db = pymysql.connect('localhost', 'root', 'a555554444', 'DOCTOR', charset='utf8')
+# 使用cursor()方法获取操作游标
+cursor = db.cursor()
+
+# 使用 execute() 方法执行 SQL，如果表存在则删除
+cursor.execute("DROP TABLE IF EXISTS DOCTOR")
+# 使用预处理语句创建表
+sql = """CREATE TABLE DOCTOR (
+            DOCTOR_ID INT NOT NULL AUTO_INCREMENT,
+            DOCTOR_NAME CHAR(100),
+            TITLE CHAR(100),
+            DOCTOR_HREF CHAR(200),
+            DEPARTMENT CHAR(100),
+            HOSPITAL_NAME CHAR(100),
+            HOSPITAL_LEVEL CHAR(50),
+            CITY CHAR(100),
+            PROVINCE CHAR(100),
+            PRIMARY KEY (DOCTOR_ID)
+            ) ENGINE=InnoDB;"""
+
+cursor.execute(sql)
+db.close()
 r = get_page(base_url)
-bj_soup = BeautifulSoup(r, 'lxml')
+bj_soup = BeautifulSoup(r, 'html5lib')
 
 province = []
 bj = bj_soup.select('div[class="kstl2"]')[0].a.string
@@ -140,7 +138,7 @@ for province, url in province:
         print(url)
         city = hospital[3]
         page = get_page(hospital[1])
-        hospital_soup = BeautifulSoup(page, 'lxml')
+        hospital_soup = BeautifulSoup(page, 'html5lib')
         # 获取医院全名
         hospital_name = hospital_soup.select('div[id="ltb"] span a')[0].string
         hospital.append(hospital_name)
