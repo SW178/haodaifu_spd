@@ -8,7 +8,7 @@ from fake_useragent import UserAgent
 
 base_url = 'http://www.haodf.com/yiyuan/all/list.htm'
 
-db = pymysql.connect('localhost', 'root', 'a555554444', 'DOCTOR')
+db = pymysql.connect('localhost', 'root', 'a555554444', 'DOCTOR', charset='utf8')
 # 使用cursor()方法获取操作游标
 cursor = db.cursor()
 
@@ -16,7 +16,7 @@ cursor = db.cursor()
 cursor.execute("DROP TABLE IF EXISTS DOCTOR")
 # 使用预处理语句创建表
 sql = """CREATE TABLE DOCTOR (
-            ID int NOT NULL,
+            DOCTOR_ID INT NOT NULL AUTO_INCREMENT,
             DOCTOR_NAME CHAR(100),
             TITLE CHAR(100),
             DOCTOR_HREF CHAR(200),
@@ -25,10 +25,11 @@ sql = """CREATE TABLE DOCTOR (
             HOSPITAL_LEVEL CHAR(50),
             CITY CHAR(100),
             PROVINCE CHAR(100),
-            PRIMARY KEY (ID)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;"""
+            PRIMARY KEY (DOCTOR_ID)
+            ) ENGINE=InnoDB;"""
 
 cursor.execute(sql)
+# cursor.execute('INSERT INTO DOCTOR(ID) VALUES(0)')
 db.close()
 
 def get_page(url):
@@ -40,7 +41,7 @@ def get_page(url):
 
 #解析地区省市页面
 def parse_province(province_name, url):
-    soup = BeautifulSoup(get_page(url), 'lxml')
+    soup = BeautifulSoup(get_page(url), 'html5lib')
     m_ctt_green_s = soup.select('div[class="m_ctt_green"]')
     for m_ctt_green in m_ctt_green_s:
         #市级名称
@@ -48,14 +49,14 @@ def parse_province(province_name, url):
         hospitals = m_ctt_green.select('a')
         for hospital in hospitals:
             #医院链接
-            hospital_href = 'http://www.haodf.com/' + hospital['href']
+            hospital_href = 'http://www.haodf.com' + hospital['href']
             #医院简称
             hospital_name1 = hospital.string
             yield [hospital_name1, hospital_href, province_name, city]
 
 #解析科室列表页面
 def parse_departmentlist(url):
-    department_list_soup = BeautifulSoup(get_page(url), 'lxml')
+    department_list_soup = BeautifulSoup(get_page(url), 'html5lib')
     department = department_list_soup.select('a[class="blue"]')[:-1]
     for a in department:
         department_name = a.string
@@ -64,10 +65,18 @@ def parse_departmentlist(url):
 
 #解析科室页面,获取医生主页
 def parse_department(url):
-    department_soup = BeautifulSoup(get_page(url), 'lxml')
+    department_soup = BeautifulSoup(get_page(url), 'html5lib')
     doctor_soup = department_soup.select('td[class="tdnew_a"] > li')
+    try:
+        next_href = department_soup.find('div', class_='p_bar').find('a', text='下一页')['href']
+    except:
+        next_href = 0
+
+    if next_href:
+        yield from parse_department(next_href)
+
     for li in doctor_soup:
-        doctor_name = li.a.string
+        doctor_name = li.a['title']
         doctor_title = li.p.string
         doctor_href = li.a["href"]
         yield doctor_name, doctor_title, doctor_href
@@ -76,12 +85,26 @@ def parse_department(url):
 def add_to_sql(doctor_name, title, doctor_href, department, hospital_name, hospital_level, city, province):
     print(doctor_name, title, doctor_href, department, hospital_name, hospital_level, city, province)
     # 打开数据库连接
-    db = pymysql.connect('localhost', 'root', 'a555554444', 'DOCTOR')
+    db = pymysql.connect('localhost', 'root', 'a555554444', 'DOCTOR', charset='utf8')
     # 使用cursor()方法获取操作游标
     cursor = db.cursor()
     # SQL 插入语句
-    sql = "INSERT INTO DOCTOR(DOCTOR_NAME, TITLE, DOCTOR_HREF, DEPARTMENT, HOSPITAL_NAME, HOSPITAL_LEVEL, CITY, \
-    PROVINCE) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)" % (doctor_name, title, doctor_href, department, hospital_name, hospital_level, city, province)
+    sql = '''INSERT INTO DOCTOR(DOCTOR_NAME,
+    TITLE,
+    DOCTOR_HREF,
+    DEPARTMENT,
+    HOSPITAL_NAME,
+    HOSPITAL_LEVEL,
+    CITY,
+    PROVINCE)
+VALUES('%s',
+    '%s',
+    '%s',
+    '%s',
+    '%s',
+    '%s',
+    '%s',
+    '%s');''' % (doctor_name, title.strip(), doctor_href, department, hospital_name, hospital_level, city, province)
 
     try:
         # 执行sql语句
@@ -92,7 +115,7 @@ def add_to_sql(doctor_name, title, doctor_href, department, hospital_name, hospi
     except:
         # 发生错误时回滚
         db.rollback()
-        print(db.Error)
+        print('数据未录入！！！！！')
     # 关闭数据库连接
     db.close()
 
@@ -114,9 +137,9 @@ for kstl in bj_soup.select('div[class="kstl"]'):
 for province, url in province:
     #遍历医院
     for hospital in parse_province(province, url):
+        print(url)
         city = hospital[3]
         page = get_page(hospital[1])
-        # time.sleep(1)#续1秒！
         hospital_soup = BeautifulSoup(page, 'lxml')
         # 获取医院全名
         hospital_name = hospital_soup.select('div[id="ltb"] span a')[0].string
@@ -132,6 +155,7 @@ for province, url in province:
             hospital.append(hospital_level)
         #科室列表页面url
         department_url = hospital[1][:-4] + '/keshi.htm'
+        print(department_url)
         #遍历科室列表页面
         for department_name, department_href in parse_departmentlist(department_url):
             #遍历医生列表页面
