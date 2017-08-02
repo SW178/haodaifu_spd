@@ -1,5 +1,5 @@
 # -*- coding:utf-8 -*-
-
+import time
 import pymysql
 import re
 import requests
@@ -8,8 +8,9 @@ from fake_useragent import UserAgent
 
 def get_page(url):
     ua = UserAgent()
-    header = {"User-Agent": ua.random}
+    header = {"User-Agent": 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.93 Safari/537.36'}
     r = requests.get(url, headers=header)
+    time.sleep(0.3)
     return r.content
 
 #解析地区省市页面
@@ -23,6 +24,7 @@ def parse_province(province_name, url):
         for hospital in hospitals:
             #医院链接
             hospital_href = 'http://www.haodf.com' + hospital['href']
+            print(hospital_href)
             #医院简称
             hospital_name1 = hospital.string
             yield [hospital_name1, hospital_href, province_name, city]
@@ -135,12 +137,16 @@ for kstl in bj_soup.select('div[class="kstl"]'):
 for province, url in province:
     #遍历医院
     for hospital in parse_province(province, url):
-        print(url)
         city = hospital[3]
         page = get_page(hospital[1])
+        print(page)
         hospital_soup = BeautifulSoup(page, 'html5lib')
         # 获取医院全名
-        hospital_name = hospital_soup.select('div[id="ltb"] span a')[0].string
+        try:
+            hospital_name = hospital_soup.select('div[id="ltb"] span a')[0].string
+        except:
+            hospital_name = hospital_soup.select('div[class="panelA_blue"] div[class="toptr"] li[class="item"] > p > a')[0].string
+        print(hospital_name)
         hospital.append(hospital_name)
         # 获取医院等级
         p = hospital_soup.select('div[id="contentA"] div[class="toptr"] p')[0]
@@ -153,7 +159,6 @@ for province, url in province:
             hospital.append(hospital_level)
         #科室列表页面url
         department_url = hospital[1][:-4] + '/keshi.htm'
-        print(department_url)
         #遍历科室列表页面
         for department_name, department_href in parse_departmentlist(department_url):
             #遍历医生列表页面
